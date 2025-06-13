@@ -19,6 +19,9 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
+  "resolutions": {
+    "agent-twitter-client": "github:timmyg/agent-twitter-client#main"
+  },
   "dependencies": {
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^10.0.0",
