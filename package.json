@@ -20,11 +20,19 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
+    "@nestjs/mongoose": "^11.0.3",
     "@nestjs/platform-express": "^10.0.0",
+    "agent-twitter-client": "^0.0.18",
+    "cache-manager": "^7.0.0",
+    "dotenv": "^16.5.0",
+    "mongoose": "^8.15.2",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.63"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
