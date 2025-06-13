@@ -39,7 +39,7 @@ export class TwitterClientInteractions {
   async handleTwitterInteractions() {
     this.logger.log('Checking Twitter interactions');
 
-    const twitterUsername = 'projectrugguard';
+    const twitterUsername = 'Projectrugguard';
 
     const searchQuery = `@${twitterUsername} riddle me this`;
     try {
