@@ -5,6 +5,7 @@ import {
   Scraper,
   SearchMode,
   Tweet,
+  Profile,
 } from 'agent-twitter-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -237,14 +238,59 @@ export class TwitterClientBase {
     await this.cacheManager.set(`twitter/${profile.username}/profile`, profile);
   }
 
-  async fetchHomeTimeline(count: number): Promise<Tweet[]> {
+  async fetchHomeTimeline(userId: string, count: number): Promise<Tweet[]> {
     this.logger.debug('fetching home timeline');
-    const homeTimeline = await this.twitterClient.getUserTweets(
-      this.profile.id,
-      count,
-    );
+    const homeTimeline = await this.twitterClient.getUserTweets(userId, count);
 
     return homeTimeline.tweets;
+  }
+
+  async fetchUsersFollowers(
+    userId: string,
+    followersCount: number,
+  ): Promise<Profile[]> {
+    try {
+      this.logger.debug('fetching user followers');
+      const followersAsync = await this.twitterClient.getFollowers(
+        userId,
+        followersCount,
+      );
+      console.log('followersAsync', followersAsync.next);
+
+      const followers: Profile[] = [];
+
+      let i = 0;
+
+      for await (const follower of followersAsync) {
+        followers.push(follower);
+        i++;
+        if (i % 100 === 0) {
+          this.logger.debug(`Fetched ${i} followers...`);
+        }
+      }
+      this.logger.debug(`Total followers fetched: ${i}`);
+
+      return followers;
+    } catch (error) {
+      this.logger.error(`Error fetching followers for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  async fetchFollowings(username, count: number) {
+    console.log('hereeee');
+    const user = await this.twitterClient.getProfile(username);
+    if (!user) {
+      this.logger.error(`User  not found for username: ${username}`);
+      return [];
+    }
+    const userFollowers = await this.fetchUsersFollowers(
+      user.userId,
+      count, // max results
+    );
+    this.logger.log(
+      `Fetched ${userFollowers.length} followers for user ${user.username}`,
+    );
   }
 
   async fetchSearchTweets(
@@ -314,9 +360,6 @@ export class TwitterClientBase {
         return;
       }
     } else {
-      // If no cache, fetch from Twitter
-      // const timelineTweets = await this.fetchHomeTimeline(50);
-
       // Get the most recent 20 mentions and interactions
       const mentionsAndInteractions = await this.fetchSearchTweets(
         `@${twitterConfig.TWITTER_USERNAME}`,
@@ -390,24 +433,5 @@ export class TwitterClientBase {
       return;
     }
     return;
-  }
-
-  private createConversationId(userIdA: string, userIdB: string): string {
-    // Sort lexicographically to ensure consistent ordering
-    const [id1, id2] = [userIdA, userIdB].sort();
-    return `${id1}-${id2}`;
-  }
-
-  async sendDirectMessage(userId: string, message: string) {
-    try {
-      const conversationId = this.createConversationId(
-        process.env.TWITTER_ID,
-        userId,
-      );
-      await this.twitterClient.sendDirectMessage(conversationId, message);
-    } catch (error) {
-      console.log(error);
-      return;
-    }
   }
 }

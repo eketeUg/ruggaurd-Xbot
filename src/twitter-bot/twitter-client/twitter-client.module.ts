@@ -4,7 +4,7 @@ import { TwitterClientController } from './twitter-client.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Memory, MemorySchema } from 'src/database/schemas/memory.schema';
 import { TwitterClientBase } from './base.provider';
-import { TwitterClientInteractions } from './trigger-listening.provider';
+import { TwitterClientInteractions } from './twitter-interaction.provider';
 import { XprofileInsightModule } from 'src/xprofile-insight/xprofile-insight.module';
 
 @Module({

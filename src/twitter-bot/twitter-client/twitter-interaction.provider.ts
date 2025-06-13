@@ -157,17 +157,32 @@ export class TwitterClientInteractions {
     );
     this.logger.log(`Parent Tweet Username: ${parentTweet.username}`);
 
-    const profileDetails = await this.profileAnalysis.AnalyzeProfile(
-      parentTweet.username,
+    const userTweets = await this.fetcthUserTimeline(
+      parentTweet.userId,
+      20, // number of tweets to pull
     );
-    if (!profileDetails) {
+    const userFollowers = await this.fetchUserFollowers(
+      parentTweet.userId,
+      1000, // max results
+    );
+    this.logger.log(
+      `Fetched ${userTweets.length} tweets and ${userFollowers.length} followers for user ${parentTweet.username}`,
+    );
+
+    const profileAnalysis = await this.profileAnalysis.AnalyzeProfile(
+      parentTweet.username,
+      userTweets,
+      userFollowers,
+    );
+    if (!profileAnalysis) {
       return;
     }
 
-    console.log('this is response :', profileDetails);
+    console.log('this is response :', profileAnalysis);
+    const tweetText = this.profileAnalysis.formatAnalysis(profileAnalysis);
 
     const response: Content = {
-      text: 'TEXT',
+      text: tweetText,
       url: tweet.permanentUrl,
       inReplyTo: tweet.inReplyToStatusId
         ? this.getTweetId(tweet.inReplyToStatusId)
@@ -296,79 +311,119 @@ export class TwitterClientInteractions {
   }
 
   splitTweetContent(content: string): string[] {
-    const maxLength = MAX_TWEET_LENGTH;
-    const paragraphs = content.split('\n\n').map((p) => p.trim());
+    const maxLength = MAX_TWEET_LENGTH - 3; // Reserve 3 chars for "..."
+    // Split by newlines, preserving empty lines for formatting
+    const lines = content.split('\n').map((line) => line.trim());
     const tweets: string[] = [];
     let currentTweet = '';
+    let i = 0;
 
-    for (const paragraph of paragraphs) {
-      if (!paragraph) continue;
+    while (i < lines.length) {
+      const line = lines[i];
+      const isLastLine = i === lines.length - 1;
+      const isHeader = this.isHeader(line);
+      const separator = currentTweet && !isLastLine && line ? '\n' : '';
 
-      if ((currentTweet + '\n\n' + paragraph).trim().length <= maxLength) {
-        if (currentTweet) {
-          currentTweet += '\n\n' + paragraph;
-        } else {
-          currentTweet = paragraph;
+      // Try adding the line to the current tweet
+      if ((currentTweet + separator + line).length <= maxLength) {
+        currentTweet += separator + line;
+        i++;
+        // If last line or next line doesn't fit (and isn't a sub-item), push tweet
+        if (
+          isLastLine ||
+          (i < lines.length &&
+            (currentTweet + '\n' + lines[i]).length > maxLength &&
+            !this.isSubItem(lines[i], i > 0 ? lines[i - 1] : null))
+        ) {
+          tweets.push(currentTweet + (isLastLine ? '' : ' ...'));
+          currentTweet = '';
         }
       } else {
+        // Line doesn't fit
         if (currentTweet) {
-          tweets.push(currentTweet.trim());
+          tweets.push(currentTweet + '  ...');
+          currentTweet = '';
         }
-        if (paragraph.length <= maxLength) {
-          currentTweet = paragraph;
+
+        if (isHeader || line.length <= maxLength) {
+          // Headers or short lines start a new tweet
+          currentTweet = line;
+          i++;
         } else {
-          // Split long paragraph into smaller chunks
-          const chunks = this.splitParagraph(paragraph, maxLength);
-          tweets.push(...chunks.slice(0, -1));
-          currentTweet = chunks[chunks.length - 1];
+          // Split long non-header line (e.g., long topics list)
+          const chunks = this.splitLongLine(line, maxLength);
+          for (let j = 0; j < chunks.length; j++) {
+            const chunk = chunks[j];
+            const isLastChunk = j === chunks.length - 1 && isLastLine;
+            if (
+              currentTweet &&
+              (currentTweet + '\n' + chunk).length > maxLength
+            ) {
+              tweets.push(currentTweet + '...');
+              currentTweet = chunk;
+            } else {
+              currentTweet += (currentTweet ? '\n' : '') + chunk;
+            }
+            if (
+              isLastChunk ||
+              (currentTweet.length > maxLength - 50 &&
+                (j < chunks.length - 1 || !isLastLine))
+            ) {
+              tweets.push(currentTweet + (isLastChunk ? '' : '...'));
+              currentTweet = '';
+            }
+          }
+          i++;
         }
       }
     }
 
     if (currentTweet) {
-      tweets.push(currentTweet.trim());
+      tweets.push(currentTweet);
     }
 
-    return tweets;
+    return tweets.map((tweet) => tweet.trim());
   }
 
-  splitParagraph(paragraph: string, maxLength: number): string[] {
-    // eslint-disable-next-line
-    const sentences = paragraph.match(/[^\.!\?]+[\.!\?]+|[^\.!\?]+$/g) || [
-      paragraph,
-    ];
+  splitLongLine(line: string, maxLength: number): string[] {
+    // Split into sentences (including trailing punctuation or incomplete sentences)
+    const sentences = line.match(/[^.!?]+[.!?]*|[^.!?]+$/g) || [line];
     const chunks: string[] = [];
     let currentChunk = '';
 
     for (const sentence of sentences) {
       if ((currentChunk + ' ' + sentence).trim().length <= maxLength) {
-        if (currentChunk) {
-          currentChunk += ' ' + sentence;
-        } else {
-          currentChunk = sentence;
-        }
+        currentChunk += (currentChunk ? ' ' : '') + sentence;
       } else {
         if (currentChunk) {
           chunks.push(currentChunk.trim());
+          currentChunk = '';
         }
         if (sentence.length <= maxLength) {
           currentChunk = sentence;
         } else {
-          // Split long sentence into smaller pieces
-          const words = sentence.split(' ');
-          currentChunk = '';
+          // Split long sentence into words
+          const words = sentence.split(/\s+/);
           for (const word of words) {
             if ((currentChunk + ' ' + word).trim().length <= maxLength) {
-              if (currentChunk) {
-                currentChunk += ' ' + word;
-              } else {
-                currentChunk = word;
-              }
+              currentChunk += (currentChunk ? ' ' : '') + word;
             } else {
               if (currentChunk) {
                 chunks.push(currentChunk.trim());
+                currentChunk = '';
               }
-              currentChunk = word;
+              if (word.length <= maxLength) {
+                currentChunk = word;
+              } else {
+                // Split very long word (e.g., URL)
+                let start = 0;
+                while (start < word.length) {
+                  const slice = word.slice(start, start + maxLength);
+                  chunks.push(slice);
+                  start += maxLength;
+                }
+                currentChunk = '';
+              }
             }
           }
         }
@@ -381,4 +436,35 @@ export class TwitterClientInteractions {
 
     return chunks;
   }
+
+  private isHeader(line: string): boolean {
+    return /^[\p{Emoji_Presentation}\p{Emoji}\u200D]+.*:$/u.test(line);
+  }
+
+  private isSubItem(line: string, prevLine: string | null): boolean {
+    return (
+      line.startsWith('- ') ||
+      (prevLine && this.isHeader(prevLine) && !this.isHeader(line))
+    );
+  }
+
+  fetcthUserTimeline = async (userId: string, tweetCount: number) => {
+    const userTimeline = await this.twitterClientBase.fetchHomeTimeline(
+      userId,
+      tweetCount, // number of tweets to pull
+    );
+    return userTimeline;
+  };
+
+  fetchUserFollowers = async (
+    userId: string,
+    maxResults: number = 100,
+  ): Promise<string[]> => {
+    const followers = await this.twitterClientBase.fetchUsersFollowers(
+      userId,
+      maxResults,
+    );
+
+    return followers.map((follower) => follower.username);
+  };
 }

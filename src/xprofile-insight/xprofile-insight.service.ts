@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Profile, Scraper } from 'agent-twitter-client';
+import { Profile, Scraper, Tweet } from 'agent-twitter-client';
 import { ProfileAnalysis } from './interfaces/profileAnalysis.interface';
+import TRUSTED_ACCOUNTS from 'src/common/utils/trustedAccount.util';
 
 @Injectable()
 export class XprofileInsightService {
@@ -11,26 +12,28 @@ export class XprofileInsightService {
     this.twitterClient = new Scraper();
   }
 
-  async AnalyzeProfile(username: string): Promise<ProfileAnalysis> {
+  async AnalyzeProfile(
+    username: string,
+    tweets: Tweet[],
+    follower?: string[],
+  ): Promise<ProfileAnalysis> {
     try {
       this.logger.log(`Analyzing profile for username: ${username}`);
       const profileData: Profile =
         await this.twitterClient.getProfile(username);
       this.logger.log(`Profile data retrieved: ${JSON.stringify(profileData)}`);
 
-      const tweetsAsyncGen = await this.fetchTweets(profileData.userId);
-      const tweetsArray = [];
-      for await (const tweet of tweetsAsyncGen) {
-        tweetsArray.push(tweet);
-      }
-
-      console.log(tweetsAsyncGen);
-      console.log(`Fetched ${tweetsArray} tweets for username: ${username}`);
+      console.log(tweets[0].text);
 
       const engagement = this.analyzeEngagement(
-        tweetsArray,
+        tweets,
         profileData.followersCount || 0,
       );
+
+      const trustedFollowerCount = this.countTrustedFollowers(follower || []);
+      const writeup = TRUSTED_ACCOUNTS.includes(username.toLowerCase())
+        ? 'This user is a trusted account.'
+        : '';
 
       return {
         username: profileData.username || username,
@@ -45,14 +48,18 @@ export class XprofileInsightService {
         ),
         bio: this.analyzeBio(profileData.biography || ''),
         engagement,
-        posting: this.analyzePosting(
-          tweetsArray,
-          profileData.statusesCount || 0,
-        ),
+        posting: this.analyzePosting(tweets, profileData.statusesCount || 0),
+        content: this.analyzeContent(tweets),
+        visibility: {
+          listedCount: profileData.listedCount || 0,
+        },
         influenceScore: this.calculateInfluenceScore(
           profileData.followersCount || 0,
           engagement,
+          profileData.listedCount || 0,
         ),
+        trustedFollowerCount,
+        writeup,
       };
     } catch (error) {
       this.logger.error(
@@ -63,9 +70,31 @@ export class XprofileInsightService {
     }
   }
 
-  private async fetchTweets(userId: string | undefined) {
-    if (!userId) throw new Error('Invalid user ID');
-    return this.twitterClient.getTweetsByUserId(userId, 50);
+  private extractKeywords(text: string): string[] {
+    return text
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(
+        (word) =>
+          word.length > 3 &&
+          !word.startsWith('http') &&
+          !word.startsWith('https') &&
+          !word.startsWith('@') &&
+          !word.startsWith('#'),
+      )
+      .slice(0, 5);
+  }
+
+  private checkTrustedFollowers(followers: string[]): string[] {
+    return followers
+      .filter((f) => f && TRUSTED_ACCOUNTS.includes(f.toLowerCase()))
+      .map((f) => f.toLowerCase());
+  }
+
+  private countTrustedFollowers(followers: string[]): number {
+    return followers.filter(
+      (f) => f && TRUSTED_ACCOUNTS.includes(f.toLowerCase()),
+    ).length;
   }
 
   private getAccountAge(joined?: Date): string {
@@ -113,6 +142,7 @@ export class XprofileInsightService {
       comprehensibility = 'Simple';
     }
     return {
+      content: bio,
       comprehensibility,
     };
   }
@@ -135,7 +165,7 @@ export class XprofileInsightService {
     return {
       avgLikes: tweetCount ? (totalLikes / tweetCount).toFixed(2) : '0',
       avgRetweets: tweetCount ? (totalRetweets / tweetCount).toFixed(2) : '0',
-      avgReplies: tweetCount ? (totalReplies / tweetCount).toFixed(2) : '0',
+      replyFrequency: tweetCount ? (totalReplies / tweetCount).toFixed(2) : '0',
       engagementRate:
         tweetCount && followers
           ? (
@@ -182,16 +212,98 @@ export class XprofileInsightService {
     };
   }
 
-  private calculateInfluenceScore(followers: number, engagement: any): string {
+  private analyzeContent(tweets: any[]) {
+    const sentiments: { [key: string]: number } = {
+      Positive: 0,
+      Neutral: 0,
+      Negative: 0,
+    };
+    const topics: string[] = [];
+
+    for (const tweet of tweets || []) {
+      if (tweet.text) {
+        // Simple sentiment heuristic
+        const text = tweet.text.toLowerCase();
+        let sentiment = 'Neutral';
+        if (
+          text.includes('great') ||
+          text.includes('awesome') ||
+          text.includes('happy')
+        ) {
+          sentiment = 'Positive';
+        } else if (
+          text.includes('bad') ||
+          text.includes('sad') ||
+          text.includes('problem')
+        ) {
+          sentiment = 'Negative';
+        }
+        sentiments[sentiment]++;
+        topics.push(...this.extractKeywords(tweet.text));
+      }
+    }
+
+    const sentimentSummary = Object.entries(sentiments)
+      .map(([label, count]) => `${label}: ${count}`)
+      .join(', ');
+
+    return {
+      sentiment: sentimentSummary,
+      topics: [...new Set(topics)].slice(0, 5),
+    };
+  }
+
+  private calculateInfluenceScore(
+    followers: number,
+    engagement: any,
+    listedCount: number,
+  ): string {
     const likes = Number(engagement.avgLikes) || 0;
     const retweets = Number(engagement.avgRetweets) || 0;
     const engagementRate =
       Number(engagement.engagementRate.replace('%', '')) || 0;
+    const listed = listedCount / 1000; // Normalize listedCount
     return (
       Math.min(
-        followers / 100000 + likes / 100 + retweets / 50 + engagementRate / 2,
+        followers / 100000 +
+          likes / 100 +
+          retweets / 50 +
+          engagementRate / 2 +
+          listed,
         100,
       ).toFixed(1) + '%'
     );
+  }
+
+  formatAnalysis(analysis: ProfileAnalysis): string {
+    const writeupSection = analysis.writeup
+      ? `\n🛡️ Status: ${analysis.writeup}`
+      : '';
+
+    return `
+      🌟 @${analysis.username} Profile Insights:
+      📅 Account Age: ${analysis.accountAge}
+      ✅ Verification: ${analysis.verificationStatus}
+      👥 F-F Ratio: ${analysis.followerFollowingRatio}
+      📝 Bio:
+        - Comprehensibility: ${analysis.bio.comprehensibility}
+      📊 Engagement:
+        - Avg Likes: ${analysis.engagement.avgLikes} ❤️
+        - Avg Retweets: ${analysis.engagement.avgRetweets} 🔄
+        - Reply Freq: ${analysis.engagement.replyFrequency} 💬
+        - Engagement Rate: ${analysis.engagement.engagementRate}
+      📬 Posting Activity:
+        - Frequency: ${analysis.posting.frequency}
+        - Top Hashtags: ${analysis.posting.hashtagUsage.join(', ') || 'None'}
+        - Media Usage: ${analysis.posting.mediaUsage}
+        - Total Tweets: ${analysis.posting.totalTweets}
+      🧠 Content Analysis:
+        - Sentiment: ${analysis.content.sentiment}
+        - Topics: ${analysis.content.topics.join(', ') || 'None'}
+      👀 Visibility:
+        - Listed in: ${analysis.visibility.listedCount} public lists
+      🔒 Trusted Followers: ${analysis.trustedFollowerCount}
+      🏆 Influence Score: ${analysis.influenceScore}${writeupSection}
+      `.trim();
   }
 }

@@ -1,9 +1,2 @@
-POST http://localhost:3827/twitter-client
+GET http://localhost:3000/twitter-client?username=0xMantleDevs&count=1000
 Content-Type: application/json
-
-{ 
-
-    "prompt": "Introducing @xFi_bot: The Multichain DeFi Bot That Lives on Twitter Send, tip, and swap tokens just by tweeting apps. No extensions. Just pure on-chain actions, powered by your words."
-}
-
-    # "prompt": "buy FQgtfugBdpFN7PZ6NdPrZpVLDBrPGxXesi4gVu3vErhY for 1 sol "

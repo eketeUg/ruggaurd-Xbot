@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { TwitterClientBase } from './base.provider';
-import { TwitterClientInteractions } from './trigger-listening.provider';
+import { TwitterClientInteractions } from './twitter-interaction.provider';
 
 @Injectable()
 export class TwitterClientService {
