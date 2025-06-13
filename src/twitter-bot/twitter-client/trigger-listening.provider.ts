@@ -5,12 +5,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Memory } from 'src/database/schemas/memory.schema';
 import { TwitterClientBase } from './base.provider';
-import { twitterConfig } from './config/twitter.config';
+import { twitterConfig } from 'src/common/config/twitter.config';
 import { SearchMode, Tweet } from 'agent-twitter-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Content, IMemory } from './interfaces/client.interface';
-import { ParseCommandService } from './parse-command';
+import { XprofileInsightService } from 'src/xprofile-insight/xprofile-insight.service';
+
 const MAX_TWEET_LENGTH = 280;
 
 @Injectable()
@@ -20,7 +21,7 @@ export class TwitterClientInteractions {
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly twitterClientBase: TwitterClientBase,
-    private readonly parseBotCommandService: ParseCommandService,
+    private readonly profileAnalysis: XprofileInsightService,
     @InjectModel(Memory.name) private readonly memoryModel: Model<Memory>,
   ) {}
 
@@ -181,18 +182,17 @@ export class TwitterClientInteractions {
       this.twitterClientBase.saveRequestMessage(message);
     }
 
-    const defiResponse = await this.parseBotCommandService.handleTweetCommand(
-      tweet.text,
-      tweet.userId,
+    const profileDetails = await this.profileAnalysis.AnalyzeProfile(
+      thread[0].username,
     );
-    if (!defiResponse) {
+    if (!profileDetails) {
       return;
     }
 
-    console.log('this is response :', defiResponse);
+    console.log('this is response :', profileDetails);
 
     const response: Content = {
-      text: defiResponse,
+      text: 'TEXT',
       url: tweet.permanentUrl,
       inReplyTo: tweet.inReplyToStatusId
         ? this.getTweetId(tweet.inReplyToStatusId)

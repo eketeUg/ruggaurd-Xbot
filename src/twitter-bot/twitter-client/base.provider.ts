@@ -1,18 +1,19 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 // import { twitterLogger } from './utils/logger.util';
-import { RequestQueue } from './utils/requestQueue.util';
+import { RequestQueue } from '../../common/utils/requestQueue.util';
 import {
   QueryTweetsResponse,
   Scraper,
   SearchMode,
   Tweet,
 } from 'agent-twitter-client';
-import { twitterConfig } from './config/twitter.config';
+
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { InjectModel } from '@nestjs/mongoose';
 import { Memory } from 'src/database/schemas/memory.schema';
 import { Model } from 'mongoose';
+import { twitterConfig } from 'src/common/config/twitter.config';
 
 type TwitterProfile = {
   id: string;
