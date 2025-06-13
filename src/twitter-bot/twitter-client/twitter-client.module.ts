@@ -18,6 +18,5 @@ import { XprofileInsightModule } from 'src/xprofile-insight/xprofile-insight.mod
     TwitterClientInteractions,
   ],
   controllers: [TwitterClientController],
-  exports: [],
 })
 export class TwitterClientModule {}

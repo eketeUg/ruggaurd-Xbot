@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-// import { twitterLogger } from './utils/logger.util';
 import { RequestQueue } from '../../common/utils/requestQueue.util';
 import {
   QueryTweetsResponse,
@@ -7,7 +6,6 @@ import {
   SearchMode,
   Tweet,
 } from 'agent-twitter-client';
-
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { InjectModel } from '@nestjs/mongoose';
@@ -207,14 +205,6 @@ export class TwitterClientBase {
     );
   }
 
-  async cacheTimeline(timeline: Tweet[]) {
-    await this.cacheManager.set(
-      `twitter/${this.profile.username}/timeline`,
-      timeline,
-      10 * 1000,
-    );
-  }
-
   async cacheMentions(mentions: Tweet[]) {
     await this.cacheManager.set(
       `twitter/${this.profile.username}/mentions`,
@@ -305,10 +295,8 @@ export class TwitterClientBase {
     if (cachedTweets && cachedTweets.length) {
       const existingMemories = await this.memoryModel
         .find({
-          roomId: {
-            $in: cachedTweets.map((tweet) =>
-              this.getRoomId(tweet.conversationId),
-            ),
+          Id: {
+            $in: cachedTweets.map((tweet) => tweet.id),
           },
         })
         .exec();
@@ -327,7 +315,7 @@ export class TwitterClientBase {
       }
     } else {
       // If no cache, fetch from Twitter
-      const timelineTweets = await this.fetchHomeTimeline(50);
+      // const timelineTweets = await this.fetchHomeTimeline(50);
 
       // Get the most recent 20 mentions and interactions
       const mentionsAndInteractions = await this.fetchSearchTweets(
@@ -337,12 +325,12 @@ export class TwitterClientBase {
       );
 
       // Combine the timeline tweets and mentions/interactions
-      const allTweets = [...timelineTweets, ...mentionsAndInteractions.tweets];
+      const allTweets = [...mentionsAndInteractions.tweets];
 
       const existingMemories = await this.memoryModel
         .find({
-          roomId: {
-            $in: allTweets.map((tweet) => this.getRoomId(tweet.conversationId)),
+          id: {
+            $in: allTweets.map((tweet) => tweet.id),
           },
         })
         .exec();
@@ -355,8 +343,6 @@ export class TwitterClientBase {
         (tweet) => !existingMemoryIds.has(this.getTweetId(tweet.id)),
       );
 
-      // Cache the fetched tweets
-      await this.cacheTimeline(timelineTweets);
       await this.cacheMentions(mentionsAndInteractions.tweets);
     }
 
@@ -367,9 +353,7 @@ export class TwitterClientBase {
     for (const tweet of tweetsToProcess) {
       const memory = new this.memoryModel({
         id: this.getTweetId(tweet.id),
-        roomId: this.getRoomId(tweet.conversationId),
         content: tweet.text,
-        embedding: this.getZeroEmbedding(),
         createdAt: new Date(tweet.timestamp * 1000),
       });
 
@@ -382,14 +366,6 @@ export class TwitterClientBase {
 
   getTweetId(tweetId: string): string {
     return `${tweetId}`;
-  }
-
-  getRoomId(conversationId: string): string {
-    return `${conversationId}`;
-  }
-
-  getZeroEmbedding(): number[] {
-    return new Array(1536).fill(0); // or whatever your embedding size is
   }
 
   async saveRequestMessage(message) {
@@ -407,10 +383,8 @@ export class TwitterClientBase {
       } else {
         await new this.memoryModel({
           id: message.id,
-          roomId: message.roomId,
           content: message.text,
           createdAt: message.createdAt,
-          embedding: this.getZeroEmbedding(),
         }).save();
       }
       return;

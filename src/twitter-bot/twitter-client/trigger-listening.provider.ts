@@ -40,13 +40,13 @@ export class TwitterClientInteractions {
     this.logger.log('Checking Twitter interactions');
 
     const twitterUsername = twitterConfig.TWITTER_USERNAME;
-    const searchQuery = `@projectruggaurd riddle me this`;
+    const searchQuery = `@${twitterUsername} riddle me this`;
     try {
       // Check for mentions
       const tweetCandidates = //TODO:remove bot username from search query
         (
           await this.twitterClientBase.fetchSearchTweets(
-            `@${twitterUsername} ${searchQuery}`,
+            `${searchQuery}`,
             20, //number of tweets to pull
             SearchMode.Latest,
           )
@@ -82,24 +82,16 @@ export class TwitterClientInteractions {
           }
           this.logger.log('New Tweet found', tweet.permanentUrl);
 
-          const roomId = this.getRoomId(tweet.conversationId);
-
-          const thread = await this.buildConversationThread(
-            tweet,
-            this.twitterClientBase,
-          );
           // this.logger.log(tweet);
           this.logger.log(`this is the user tweet  :, ${tweet.text}`);
 
           const message = {
             content: { text: tweet.text },
-            roomId,
           };
 
           await this.handleTweet({
             tweet,
             message,
-            thread,
           });
 
           // Update the last checked tweet ID after processing each tweet
@@ -119,11 +111,9 @@ export class TwitterClientInteractions {
   private async handleTweet({
     tweet,
     message,
-    thread,
   }: {
     tweet: Tweet;
     message: IMemory;
-    thread: Tweet[];
   }) {
     if (tweet.userId === process.env.TWITTER_ID) {
       this.logger.log('skipping tweet from bot itself', tweet.id);
@@ -144,23 +134,6 @@ export class TwitterClientInteractions {
     //   };
     // const currentPost = formatTweet(tweet);
 
-    this.logger.debug(`Thread: , ${thread}`);
-    const formattedConversation = thread
-      .map(
-        (tweet) => `@${tweet.username} (${new Date(
-          tweet.timestamp * 1000,
-        ).toLocaleString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          month: 'short',
-          day: 'numeric',
-        })}):
-        ${tweet.text}`,
-      )
-      .join('\n\n');
-
-    this.logger.debug(`formattedConversation: , ${formattedConversation}`);
-
     // check if the tweet exists, save if it doesn't
     const tweetId = this.getTweetId(tweet.id);
     const tweetExists = await this.memoryModel
@@ -171,19 +144,21 @@ export class TwitterClientInteractions {
 
     if (!tweetExists) {
       this.logger.log('tweet does not exist, saving');
-      const roomId = this.getRoomId(tweet.conversationId);
 
       const message = {
         id: tweetId,
         content: tweet.text,
-        roomId,
         createdAt: tweet.timestamp * 1000,
       };
       this.twitterClientBase.saveRequestMessage(message);
     }
+    const parentTweet = await this.twitterClientBase.getTweet(
+      tweet.inReplyToStatusId,
+    );
+    this.logger.log(`Parent Tweet Username: ${parentTweet.username}`);
 
     const profileDetails = await this.profileAnalysis.AnalyzeProfile(
-      thread[0].username,
+      parentTweet.username,
     );
     if (!profileDetails) {
       return;
@@ -210,7 +185,6 @@ export class TwitterClientInteractions {
           const memories = await this.sendTweet(
             this.twitterClientBase,
             response,
-            message.roomId,
             twitterConfig.TWITTER_USERNAME,
             tweet.id,
           );
@@ -249,118 +223,8 @@ export class TwitterClientInteractions {
     }
   }
 
-  //TODO:MxReplies
-  buildConversationThread = async (
-    tweet: Tweet,
-    client: TwitterClientBase,
-    maxReplies: number = 20,
-  ): Promise<Tweet[]> => {
-    const thread: Tweet[] = [];
-    const visited: Set<string> = new Set();
-
-    const processThread = async (currentTweet: Tweet, depth: number = 0) => {
-      this.logger.debug('Processing tweet:', {
-        id: currentTweet.id,
-        inReplyToStatusId: currentTweet.inReplyToStatusId,
-        depth: depth,
-      });
-
-      if (!currentTweet) {
-        this.logger.debug('No current tweet found for thread building');
-        return;
-      }
-
-      // Stop if we've reached our reply limit
-      if (depth >= maxReplies) {
-        this.logger.debug('Reached maximum reply depth', depth);
-        return;
-      }
-
-      // Handle memory storage
-      const memory = await this.memoryModel
-        .find({
-          id: client.getTweetId(currentTweet.id),
-        })
-        .exec();
-
-      if (!memory) {
-        const memory = new this.memoryModel({
-          id: client.getTweetId(currentTweet.id),
-          content: currentTweet.text,
-          createdAt: currentTweet.timestamp * 1000,
-          roomId: client.getRoomId(currentTweet.conversationId),
-        });
-        await memory.save();
-        this.logger.debug('Saved memory for tweet:', currentTweet.id);
-      }
-
-      if (visited.has(currentTweet.id)) {
-        this.logger.debug('Already visited tweet:', currentTweet.id);
-        return;
-      }
-
-      visited.add(currentTweet.id);
-      thread.unshift(currentTweet);
-
-      this.logger.debug('Current thread state:', {
-        length: thread.length,
-        currentDepth: depth,
-        tweetId: currentTweet.id,
-      });
-
-      // If there's a parent tweet, fetch and process it
-      if (currentTweet.inReplyToStatusId) {
-        this.logger.debug(
-          'Fetching parent tweet:',
-          currentTweet.inReplyToStatusId,
-        );
-        try {
-          const parentTweet = await client.twitterClient.getTweet(
-            currentTweet.inReplyToStatusId,
-          );
-
-          if (parentTweet) {
-            this.logger.debug('Found parent tweet:', {
-              id: parentTweet.id,
-              text: parentTweet.text?.slice(0, 50),
-            });
-            await processThread(parentTweet, depth + 1);
-          } else {
-            this.logger.debug(
-              'No parent tweet found for:',
-              currentTweet.inReplyToStatusId,
-            );
-          }
-        } catch (error) {
-          this.logger.error('Error fetching parent tweet:', {
-            tweetId: currentTweet.inReplyToStatusId,
-            error,
-          });
-        }
-      } else {
-        this.logger.debug('Reached end of reply chain at:', currentTweet.id);
-      }
-    };
-
-    await processThread(tweet, 0);
-
-    this.logger.debug('Final thread built:', {
-      totalTweets: thread.length,
-      tweetIds: thread.map((t) => ({
-        id: t.id,
-        text: t.text?.slice(0, 50),
-      })),
-    });
-
-    return thread;
-  };
-
   private getTweetId(tweetId: string): string {
     return `${tweetId}`;
-  }
-
-  private getRoomId(conversationId: string): string {
-    return `${conversationId}`;
   }
 
   wait = (minTime: number = 1000, maxTime: number = 3000) => {
@@ -372,7 +236,6 @@ export class TwitterClientInteractions {
   async sendTweet(
     client: TwitterClientBase,
     content: Content,
-    roomId: string,
     twitterUsername: string,
     inReplyTo: string,
   ): Promise<IMemory[]> {
@@ -426,7 +289,6 @@ export class TwitterClientInteractions {
           ? this.getTweetId(tweet.inReplyToStatusId)
           : undefined,
       },
-      roomId,
       createdAt: tweet.timestamp * 1000,
     }));
 

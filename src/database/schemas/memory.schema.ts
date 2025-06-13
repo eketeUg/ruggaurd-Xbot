@@ -10,12 +10,6 @@ export class Memory {
   @Prop({ default: uuidv4 })
   id: string;
 
-  @Prop({ required: true })
-  roomId: string;
-
-  @Prop({ type: [Number], required: true })
-  embedding: number[];
-
   @Prop()
   content: string;
 

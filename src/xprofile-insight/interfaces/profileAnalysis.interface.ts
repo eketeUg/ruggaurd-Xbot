@@ -4,9 +4,7 @@ export interface ProfileAnalysis {
   verificationStatus: string;
   followerFollowingRatio: string;
   bio: {
-    content: string;
-    length: number;
-    keywords: string[];
+    comprehensibility: string;
   };
   engagement: {
     avgLikes: string;
@@ -18,18 +16,7 @@ export interface ProfileAnalysis {
     frequency: string;
     hashtagUsage: string[];
     mediaUsage: string;
-  };
-  content: {
-    topics: string[];
-  };
-  network: {
-    sampledFollowers: string[];
-    followerEngagement: string;
-  };
-  profile: {
-    location: string;
-    language: string;
-    customization: string;
+    totalTweets: number;
   };
   influenceScore: string;
 }

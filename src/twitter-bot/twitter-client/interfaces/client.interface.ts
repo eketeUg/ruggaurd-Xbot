@@ -36,10 +36,6 @@ export interface IMemory {
   createdAt?: number;
   /** Memory content */
   content: Content;
-  /** Optional embedding vector */
-  embedding?: number[];
-  /** Associated room ID */
-  roomId: string;
   /** Whether memory is unique */
   unique?: boolean;
   /** Embedding similarity score */
