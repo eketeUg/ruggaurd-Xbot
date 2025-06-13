@@ -39,18 +39,18 @@ export class TwitterClientInteractions {
   async handleTwitterInteractions() {
     this.logger.log('Checking Twitter interactions');
 
-    const twitterUsername = twitterConfig.TWITTER_USERNAME;
+    const twitterUsername = 'projectrugguard';
+
     const searchQuery = `@${twitterUsername} riddle me this`;
     try {
       // Check for mentions
-      const tweetCandidates = //TODO:remove bot username from search query
-        (
-          await this.twitterClientBase.fetchSearchTweets(
-            `${searchQuery}`,
-            20, //number of tweets to pull
-            SearchMode.Latest,
-          )
-        ).tweets;
+      const tweetCandidates = (
+        await this.twitterClientBase.fetchSearchTweets(
+          `${searchQuery}`,
+          20, //number of tweets to pull
+          SearchMode.Latest,
+        )
+      ).tweets;
 
       // de-duplicate tweetCandidates with a set
       const uniqueTweetCandidates = [...new Set(tweetCandidates)];

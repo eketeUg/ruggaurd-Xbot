@@ -36,22 +36,24 @@ export class TwitterClientBase {
     this.twitterClient = new Scraper();
     this.requestQueue = new RequestQueue();
   }
-  // "agent-twitter-client": "^0.0.17",
+
+  /**
+   * Initializes the Twitter client, logs in, and fetches the user's profile.
+   * Sets cookies if available and caches them.
+   * @throws {Error} If Twitter username is not configured or profile loading fails.
+   */
   async init() {
-    //test
     const username = twitterConfig.TWITTER_USERNAME;
 
     if (!username) {
       throw new Error('Twitter username not configured');
     }
-    // Check for Twitter cookies
+
     if (twitterConfig.TWITTER_COOKIES) {
       const cookiesArray = JSON.parse(twitterConfig.TWITTER_COOKIES);
-      // console.log('this is cookiesArray :', cookiesArray);
       await this.setCookiesFromArray(cookiesArray);
     } else {
       const cachedCookies = await this.getCachedCookies(process.env.TWITTER_ID);
-      // console.log('this is cached cookie :', cachedCookies);
       if (cachedCookies) {
         await this.setCookiesFromArray(cachedCookies.cookies);
       }
@@ -70,29 +72,6 @@ export class TwitterClientBase {
       await this.cacheCookies(process.env.TWITTER_ID, cookies);
       this.logger.log('Successfully logged in to Twitter.');
     }
-    // while (true) {
-    //   try {
-    //     await this.twitterClient.login(
-    //       username,
-    //       twitterConfig.TWITTER_PASSWORD,
-    //       twitterConfig.TWITTER_EMAIL,
-    //       twitterConfig.TWITTER_2FA_SECRET || undefined,
-    //     );
-
-    //     if (await this.twitterClient.isLoggedIn()) {
-    //       const cookies = await this.twitterClient.getCookies();
-    //       await this.cacheCookies(process.env.TWITTER_ID, cookies);
-    //       this.logger.log('Successfully logged in to Twitter.');
-    //       break;
-    //     }
-
-    //     this.logger.warn('Not logged in yet. Retrying...');
-    //   } catch (error) {
-    //     this.logger.error(`Login error: ${error.message}`);
-    //   }
-
-    //   await new Promise((resolve) => setTimeout(resolve, 2000));
-    // }
 
     // Initialize Twitter profile
     this.profile = await this.fetchProfile(username);
@@ -111,6 +90,10 @@ export class TwitterClientBase {
     await this.populateTimeline();
   }
 
+  /**
+   * Sets cookies for the Twitter client from an array of cookie objects.
+   * @param {Array} cookiesArray - Array of cookie objects with properties: key, value, domain, path, secure, httpOnly, sameSite.
+   */
   async setCookiesFromArray(cookiesArray: any[]) {
     const cookieStrings = cookiesArray.map(
       (cookie) =>
@@ -122,6 +105,13 @@ export class TwitterClientBase {
     );
     await this.twitterClient.setCookies(cookieStrings);
   }
+
+  /**
+   * Fetches the Twitter profile for the given username.
+   * Caches the profile and returns it.
+   * @param {string} username - The Twitter username to fetch the profile for.
+   * @returns {Promise<TwitterProfile | undefined>} The Twitter profile or undefined if not found.
+   */
   async fetchProfile(username: string): Promise<TwitterProfile> {
     const cached = await this.getCachedProfile(username);
 
@@ -149,6 +139,10 @@ export class TwitterClientBase {
     }
   }
 
+  /**
+   * Caches a tweet object by its ID.
+   * @param {Tweet} tweet - The tweet object to cache.
+   */
   async cacheTweet(tweet: Tweet): Promise<void> {
     if (!tweet) {
       this.logger.log('Tweet is undefined, skipping cache');
@@ -158,6 +152,11 @@ export class TwitterClientBase {
     this.cacheManager.set(`twitter/tweets/${tweet.id}`, tweet);
   }
 
+  /**
+   * Retrieves a cached tweet by its ID.
+   * @param {string} tweetId - The ID of the tweet to retrieve from cache.
+   * @returns {Promise<Tweet | undefined>} The cached tweet or undefined if not found.
+   */
   async getCachedTweet(tweetId: string): Promise<Tweet | undefined> {
     const cached = await this.cacheManager.get<Tweet>(
       `twitter/tweets/${tweetId}`,
@@ -166,6 +165,11 @@ export class TwitterClientBase {
     return cached;
   }
 
+  /**
+   * Retrieves a tweet by its ID, either from cache or by making a request.
+   * @param {string} tweetId - The ID of the tweet to retrieve.
+   * @returns {Promise<Tweet>} The tweet object.
+   */
   async getTweet(tweetId: string): Promise<Tweet> {
     const cachedTweet = await this.getCachedTweet(tweetId);
 
@@ -181,6 +185,10 @@ export class TwitterClientBase {
     return tweet;
   }
 
+  /**
+   * Loads the latest checked tweet ID from cache.
+   * If not found, initializes it to null.
+   */
   async loadLatestCheckedTweetId(): Promise<void> {
     const latestCheckedTweetId = await this.cacheManager.get<string>(
       `twitter/${this.profile.username}/latest_checked_tweet_id`,
@@ -191,6 +199,10 @@ export class TwitterClientBase {
     }
   }
 
+  /**
+   * Caches the latest checked tweet ID.
+   * If lastCheckedTweetId is null, it will not cache anything.
+   */
   async cacheLatestCheckedTweetId() {
     if (this.lastCheckedTweetId) {
       await this.cacheManager.set(
@@ -200,12 +212,20 @@ export class TwitterClientBase {
     }
   }
 
+  /**
+   * Retrieves the cached timeline for the user's profile.
+   * @returns {Promise<Tweet[] | undefined>} The cached timeline or undefined if not found.
+   */
   async getCachedTimeline(): Promise<Tweet[] | undefined> {
     return await this.cacheManager.get<Tweet[]>(
       `twitter/${this.profile.username}/timeline`,
     );
   }
 
+  /**
+   * Caches the user's timeline tweets.
+   * @param {Tweet[]} tweets - Array of tweet objects to cache.
+   */
   async cacheMentions(mentions: Tweet[]) {
     await this.cacheManager.set(
       `twitter/${this.profile.username}/mentions`,
@@ -214,12 +234,20 @@ export class TwitterClientBase {
     );
   }
 
+  /**
+   * Caches the user's timeline tweets.
+   * @param {Tweet[]} tweets - Array of tweet objects to cache.
+   */
   async getCachedCookies(userId: string) {
     return await this.cacheManager.get<{ cookies: any[] }>(
       `twitter/${userId}/cookies`,
     );
   }
-
+  /**
+   * Caches the user's cookies.
+   * @param {string} userId - The user ID to cache cookies for.
+   * @param {any[]} cookies - Array of cookie objects to cache.
+   */
   async cacheCookies(userId: string, cookies: any[]) {
     await this.cacheManager.set(
       `twitter/${userId}/cookies`,
@@ -228,12 +256,21 @@ export class TwitterClientBase {
     );
   }
 
+  /**
+   * Retrieves the cached profile for the given username.
+   * @param {string} username - The Twitter username to retrieve the profile for.
+   * @returns {Promise<TwitterProfile | undefined>} The cached profile or undefined if not found.
+   */
   async getCachedProfile(username: string) {
     return await this.cacheManager.get<TwitterProfile>(
       `twitter/${username}/profile`,
     );
   }
 
+  /**
+   * Caches the Twitter profile for the given username.
+   * @param {TwitterProfile} profile - The Twitter profile to cache.
+   */
   async cacheProfile(profile: TwitterProfile) {
     await this.cacheManager.set(`twitter/${profile.username}/profile`, profile);
   }
@@ -362,7 +399,7 @@ export class TwitterClientBase {
     } else {
       // Get the most recent 20 mentions and interactions
       const mentionsAndInteractions = await this.fetchSearchTweets(
-        `@${twitterConfig.TWITTER_USERNAME}`,
+        `@projectrugguard`,
         20,
         SearchMode.Latest,
       );
