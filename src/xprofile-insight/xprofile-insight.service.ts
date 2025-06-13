@@ -12,6 +12,19 @@ export class XprofileInsightService {
     this.twitterClient = new Scraper();
   }
 
+  /**
+   * Analyzes a Twitter/X profile to generate a comprehensive set of insights.
+   *
+   * This method fetches the user's profile data, computes engagement metrics,
+   * analyzes posting habits, content, visibility, and influence, and checks for trusted status.
+   * It aggregates all these insights into a structured ProfileAnalysis object.
+   *
+   * @param username - The Twitter/X username to analyze.
+   * @param tweets - An array of recent Tweet objects from the user.
+   * @param follower - (Optional) An array of follower usernames to check for trusted accounts.
+   * @returns A promise that resolves to a ProfileAnalysis object containing all computed insights.
+   * @throws Error if profile data cannot be fetched or analysis fails.
+   */
   async AnalyzeProfile(
     username: string,
     tweets: Tweet[],
@@ -70,6 +83,11 @@ export class XprofileInsightService {
     }
   }
 
+  /**
+   * Extracts keywords from the provided text.
+   * @param text The text to extract keywords from.
+   * @returns An array of keywords.
+   */
   private extractKeywords(text: string): string[] {
     return text
       .toLowerCase()
@@ -85,18 +103,33 @@ export class XprofileInsightService {
       .slice(0, 5);
   }
 
+  /**
+   * Checks the list of followers against a predefined list of trusted accounts.
+   * @param followers The list of followers to check.
+   * @returns An array of trusted followers.
+   */
   private checkTrustedFollowers(followers: string[]): string[] {
     return followers
       .filter((f) => f && TRUSTED_ACCOUNTS.includes(f.toLowerCase()))
       .map((f) => f.toLowerCase());
   }
 
+  /**
+   * Counts the number of trusted followers from the provided list.
+   * @param followers The list of followers to check.
+   * @returns The count of trusted followers.
+   */
   private countTrustedFollowers(followers: string[]): number {
     return followers.filter(
       (f) => f && TRUSTED_ACCOUNTS.includes(f.toLowerCase()),
     ).length;
   }
 
+  /**
+   * Calculates the account age based on the joined date.
+   * @param joined The date when the account was created.
+   * @returns A string representing the account age in years and months.
+   */
   private getAccountAge(joined?: Date): string {
     if (!joined) return 'Unknown';
     const createdDate = new Date(joined);
@@ -109,6 +142,12 @@ export class XprofileInsightService {
     return `${diffYears}y ${diffMonths}m`;
   }
 
+  /**
+   * Determines the verification status of the profile.
+   * @param isVerified Indicates if the profile is verified.
+   * @param isBlueVerified Indicates if the profile is blue verified.
+   * @returns A string representing the verification status.
+   */
   private getVerificationStatus(
     isVerified?: boolean,
     isBlueVerified?: boolean,
@@ -118,6 +157,12 @@ export class XprofileInsightService {
     return '❌ Not Verified';
   }
 
+  /**
+   * Calculates the follower-following ratio and provides context based on the values.
+   * @param followersCount The number of followers.
+   * @param followingCount The number of accounts the profile is following.
+   * @returns A string representing the ratio and its context.
+   */
   private getFollowerFollowingRatio(
     followersCount?: number,
     followingCount?: number,
@@ -132,6 +177,11 @@ export class XprofileInsightService {
     return `${ratio} (${context})`;
   }
 
+  /**
+   * Analyzes the bio of the profile to determine its comprehensibility.
+   * @param bio The biography text of the profile.
+   * @returns An object containing the bio content and its comprehensibility status.
+   */
   private analyzeBio(bio: string) {
     const wordCount = bio.trim().split(/\s+/).length;
     const hasEmojis = /[\u{1F300}-\u{1F9FF}]/u.test(bio);
@@ -147,6 +197,12 @@ export class XprofileInsightService {
     };
   }
 
+  /**
+   * Analyzes the engagement metrics of the profile.
+   * @param tweets The list of tweets to analyze.
+   * @param followers The number of followers of the profile.
+   * @returns An object containing average likes, retweets, reply frequency, and engagement rate.
+   */
   private analyzeEngagement(tweets: any[], followers: number) {
     let totalLikes = 0;
     let totalRetweets = 0;
@@ -177,6 +233,12 @@ export class XprofileInsightService {
     };
   }
 
+  /**
+   * Analyzes the posting activity of the profile.
+   * @param tweets The list of tweets to analyze.
+   * @param totalTweets The total number of tweets from the profile.
+   * @returns An object containing posting frequency, hashtag usage, media usage, and total tweets.
+   */
   private analyzePosting(tweets: any[], totalTweets: number) {
     let tweetCount = 0;
     let mediaCount = 0;
@@ -212,6 +274,11 @@ export class XprofileInsightService {
     };
   }
 
+  /**
+   * Analyzes the content of tweets to determine sentiment and extract topics.
+   * @param tweets The list of tweets to analyze.
+   * @returns An object containing sentiment analysis and topics.
+   */
   private analyzeContent(tweets: any[]) {
     const sentiments: { [key: string]: number } = {
       Positive: 0,
@@ -253,6 +320,13 @@ export class XprofileInsightService {
     };
   }
 
+  /**
+   * Calculates the influence score based on followers, engagement, and listed count.
+   * @param followers The number of followers.
+   * @param engagement The engagement metrics.
+   * @param listedCount The number of public lists the profile is listed in.
+   * @returns A string representing the influence score as a percentage.
+   */
   private calculateInfluenceScore(
     followers: number,
     engagement: any,
@@ -275,6 +349,11 @@ export class XprofileInsightService {
     );
   }
 
+  /**
+   * Formats the profile analysis into a human-readable string.
+   * @param analysis The profile analysis object.
+   * @returns A formatted string containing the profile insights.
+   */
   formatAnalysis(analysis: ProfileAnalysis): string {
     const writeupSection = analysis.writeup
       ? `\n🛡️ Status: ${analysis.writeup}`

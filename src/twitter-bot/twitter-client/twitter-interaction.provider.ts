@@ -25,6 +25,13 @@ export class TwitterClientInteractions {
     @InjectModel(Memory.name) private readonly memoryModel: Model<Memory>,
   ) {}
 
+  /**
+   * Starts the Twitter interactions loop.
+   * This method sets up a loop that checks for Twitter interactions at a specified interval.
+   * It uses the TwitterClientBase to fetch tweets and process them.
+   * The loop runs indefinitely, checking for new interactions every 30 seconds by default.
+   * @returns {Promise<void>} A promise that resolves when the loop is started.
+   */
   async start() {
     const handleTwitterInteractionsLoop = () => {
       this.handleTwitterInteractions();
@@ -36,6 +43,12 @@ export class TwitterClientInteractions {
     handleTwitterInteractionsLoop();
   }
 
+  /**
+   * Handles Twitter interactions by checking for new tweets that mention the bot.
+   * It processes each tweet, analyzes the user's profile, and sends a response if necessary.
+   * The method also manages the last checked tweet ID to avoid processing the same tweet multiple times.
+   * @returns {Promise<void>} A promise that resolves when the interactions are handled.
+   */
   async handleTwitterInteractions() {
     this.logger.log('Checking Twitter interactions');
 
@@ -108,6 +121,14 @@ export class TwitterClientInteractions {
     }
   }
 
+  /**
+   * Handles a single tweet by processing its content, checking if it exists in the database,
+   * and sending a response if necessary.
+   * @param {Object} params - The parameters for handling the tweet.
+   * @param {Tweet} params.tweet - The tweet object to process.
+   * @param {IMemory} params.message - The message object containing the tweet content.
+   * @returns {Promise<void>} A promise that resolves when the tweet is processed.
+   */
   private async handleTweet({
     tweet,
     message,
@@ -201,16 +222,39 @@ export class TwitterClientInteractions {
     );
   }
 
+  /**
+   * Generates a unique tweet ID based on the tweet's ID.
+   * This is used to ensure that each tweet can be uniquely identified in the database.
+   * @param {string} tweetId - The ID of the tweet.
+   * @returns {string} The formatted tweet ID.
+   */
   private getTweetId(tweetId: string): string {
     return `${tweetId}`;
   }
 
-  wait = (minTime: number = 1000, maxTime: number = 3000) => {
+  /**
+   * Waits for a random amount of time between minTime and maxTime milliseconds.
+   * This is used to avoid rate limiting issues when sending multiple tweets in quick succession.
+   * @param {number} minTime - The minimum wait time in milliseconds (default: 1000).
+   * @param {number} maxTime - The maximum wait time in milliseconds (default: 3000).
+   * @returns {Promise<void>} A promise that resolves after the wait time.
+   */
+  private wait = (minTime: number = 1000, maxTime: number = 3000) => {
     const waitTime =
       Math.floor(Math.random() * (maxTime - minTime + 1)) + minTime;
     return new Promise((resolve) => setTimeout(resolve, waitTime));
   };
 
+  /**
+   * Sends a tweet with the given content and in reply to a specific tweet.
+   * This method splits the content into chunks if it exceeds the maximum tweet length,
+   * and sends each chunk as a separate tweet in a thread.
+   * @param {TwitterClientBase} client - The Twitter client to use for sending the tweet.
+   * @param {Content} content - The content of the tweet to send.
+   * @param {string} twitterUsername - The username of the Twitter account sending the tweet.
+   * @param {string} inReplyTo - The ID of the tweet to reply to.
+   * @returns {Promise<IMemory[]>} A promise that resolves to an array of memories representing the sent tweets.
+   */
   async sendTweet(
     client: TwitterClientBase,
     content: Content,
@@ -273,6 +317,12 @@ export class TwitterClientInteractions {
     return memories;
   }
 
+  /**
+   * Splits the content of a tweet into multiple tweets if it exceeds the maximum tweet length.
+   * It handles headers, sub-items, and long lines to ensure that the content is split appropriately.
+   * @param {string} content - The content of the tweet to split.
+   * @returns {string[]} An array of strings, each representing a tweet.
+   */
   splitTweetContent(content: string): string[] {
     const maxLength = MAX_TWEET_LENGTH - 3; // Reserve 3 chars for "..."
     // Split by newlines, preserving empty lines for formatting
@@ -348,6 +398,13 @@ export class TwitterClientInteractions {
     return tweets.map((tweet) => tweet.trim());
   }
 
+  /**
+   * Splits a long line into smaller chunks that fit within the specified maximum length.
+   * It handles sentences, words, and very long words (like URLs) to ensure that each chunk is within the limit.
+   * @param {string} line - The line to split.
+   * @param {number} maxLength - The maximum length for each chunk.
+   * @returns {string[]} An array of strings, each representing a chunk of the original line.
+   */
   splitLongLine(line: string, maxLength: number): string[] {
     // Split into sentences (including trailing punctuation or incomplete sentences)
     const sentences = line.match(/[^.!?]+[.!?]*|[^.!?]+$/g) || [line];
@@ -400,10 +457,24 @@ export class TwitterClientInteractions {
     return chunks;
   }
 
+  /**
+   * Checks if a line is a header based on specific criteria.
+   * A header is defined as a line that starts with an emoji or special character and ends with a colon.
+   * @param {string} line - The line to check.
+   * @returns {boolean} True if the line is a header, false otherwise.
+   */
   private isHeader(line: string): boolean {
     return /^[\p{Emoji_Presentation}\p{Emoji}\u200D]+.*:$/u.test(line);
   }
 
+  /**
+   * Checks if a line is a sub-item based on specific criteria.
+   * A sub-item is defined as a line that starts with a hyphen or dash followed by a space,
+   * or a line that is not a header and follows a header line.
+   * @param {string} line - The line to check.
+   * @param {string | null} prevLine - The previous line, used to determine if the current line is a sub-item.
+   * @returns {boolean} True if the line is a sub-item, false otherwise.
+   */
   private isSubItem(line: string, prevLine: string | null): boolean {
     return (
       line.startsWith('- ') ||
@@ -411,6 +482,13 @@ export class TwitterClientInteractions {
     );
   }
 
+  /**
+   * Fetches the user timeline for a specific user.
+   * This method retrieves the most recent tweets from the user's timeline.
+   * @param {string} userId - The ID of the user whose timeline to fetch.
+   * @param {number} tweetCount - The number of tweets to pull from the timeline.
+   * @returns {Promise<Tweet[]>} A promise that resolves to an array of tweets from the user's timeline.
+   */
   fetcthUserTimeline = async (userId: string, tweetCount: number) => {
     const userTimeline = await this.twitterClientBase.fetchHomeTimeline(
       userId,
@@ -419,6 +497,13 @@ export class TwitterClientInteractions {
     return userTimeline;
   };
 
+  /**
+   * Fetches the followers of a specific user.
+   * This method retrieves the usernames of the user's followers.
+   * @param {string} userId - The ID of the user whose followers to fetch.
+   * @param {number} maxResults - The maximum number of followers to retrieve (default: 100).
+   * @returns {Promise<string[]>} A promise that resolves to an array of usernames of the user's followers.
+   */
   fetchUserFollowers = async (
     userId: string,
     maxResults: number = 100,
