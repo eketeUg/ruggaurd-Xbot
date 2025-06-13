@@ -282,6 +282,13 @@ export class TwitterClientBase {
     return homeTimeline.tweets;
   }
 
+  /**
+   * Fetches the followers of a user by their user ID.
+   * Uses a request queue to manage requests and handles rate limiting.
+   * @param {string} userId - The user ID to fetch followers for.
+   * @param {number} followersCount - The maximum number of followers to fetch.
+   * @returns {Promise<Profile[]>} An array of profiles representing the followers.
+   */
   async fetchUsersFollowers(
     userId: string,
     followersCount: number,
@@ -314,6 +321,11 @@ export class TwitterClientBase {
     }
   }
 
+  /**
+   * Fetches the followings of a user by their username.
+   * @param {string} username - The Twitter username to fetch followings for.
+   * @param {number} count - The maximum number of followings to fetch.
+   */
   async fetchFollowings(username, count: number) {
     console.log('hereeee');
     const user = await this.twitterClient.getProfile(username);
@@ -330,6 +342,15 @@ export class TwitterClientBase {
     );
   }
 
+  /**
+   * Fetches tweets based on a search query.
+   * Uses a request queue to manage requests and handles rate limiting.
+   * @param {string} query - The search query to use for fetching tweets.
+   * @param {number} maxTweets - The maximum number of tweets to fetch.
+   * @param {SearchMode} searchMode - The mode of search (e.g., Latest, Popular).
+   * @param {string} [cursor] - Optional cursor for pagination.
+   * @returns {Promise<QueryTweetsResponse>} The response containing the fetched tweets.
+   */
   async fetchSearchTweets(
     query: string,
     maxTweets: number,
@@ -367,6 +388,12 @@ export class TwitterClientBase {
     }
   }
 
+  /**
+   * Populates the timeline by fetching tweets and saving them as memories.
+   * It checks for cached tweets and saves new ones that are not already in the memory model.
+   * If no cached tweets are found, it fetches the latest mentions and interactions.
+   * @returns {Promise<void>}
+   */
   private async populateTimeline(): Promise<void> {
     this.logger.debug('Populating timeline...');
 
@@ -444,10 +471,26 @@ export class TwitterClientBase {
     this.logger.log(`Finished saving ${tweetsToProcess.length} tweets.`);
   }
 
+  /**
+   * Converts a tweet ID to a string format.
+   * @param {string} tweetId - The tweet ID to convert.
+   * @returns {string} The tweet ID as a string.
+   */
   getTweetId(tweetId: string): string {
     return `${tweetId}`;
   }
 
+  /**
+   * Saves a request message to the memory model if it contains text content.
+   * Checks if the message is a duplicate of the most recent message in the same room.
+   * If it is a duplicate, it does not save it again.
+   * @param {Object} message - The message object to save.
+   * @param {string} message.id - The unique identifier for the message.
+   * @param {string} message.roomId - The ID of the room where the message was sent.
+   * @param {Object} message.content - The content of the message.
+   * @param {string} message.content.text - The text content of the message.
+   * @param {Date} message.createdAt - The timestamp when the message was created.
+   */
   async saveRequestMessage(message) {
     if (message.content.text) {
       const recentMessage = await this.memoryModel

@@ -192,50 +192,13 @@ export class TwitterClientInteractions {
     const stringId = this.getTweetId(tweet.id);
 
     response.inReplyTo = stringId;
-    response.action = 'REPLY';
 
-    if (response.text) {
-      try {
-        const callback: any = async (response: Content) => {
-          const memories = await this.sendTweet(
-            this.twitterClientBase,
-            response,
-            twitterConfig.TWITTER_USERNAME,
-            tweet.id,
-          );
-          return memories;
-        };
-
-        const responseMessages = await callback(response);
-
-        for (const responseMessage of responseMessages) {
-          if (
-            responseMessage === responseMessages[responseMessages.length - 1]
-          ) {
-            responseMessage.content.action = response.action;
-          } else {
-            responseMessage.content.action = 'CONTINUE';
-          }
-          await new this.memoryModel({
-            id: responseMessage.id,
-            roomId: responseMessage.roomId,
-            content: responseMessage.text,
-            createdAt: responseMessage.createdAt,
-          }).save();
-        }
-
-        const responseInfo = `Selected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`;
-
-        await this.cacheManager.set(
-          `twitter/tweet_generation_${tweet.id}.txt`,
-          responseInfo,
-        );
-        await this.wait();
-      } catch (error) {
-        console.log(error);
-        this.logger.error(`Error sending response tweet: ${error}`);
-      }
-    }
+    await this.sendTweet(
+      this.twitterClientBase,
+      response,
+      twitterConfig.TWITTER_USERNAME,
+      tweet.id,
+    );
   }
 
   private getTweetId(tweetId: string): string {
