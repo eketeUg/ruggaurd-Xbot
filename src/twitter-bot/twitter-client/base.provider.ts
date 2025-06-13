@@ -399,7 +399,7 @@ export class TwitterClientBase {
     } else {
       // Get the most recent 20 mentions and interactions
       const mentionsAndInteractions = await this.fetchSearchTweets(
-        `@projectrugguard`,
+        `@Projectrugguard`,
         20,
         SearchMode.Latest,
       );
